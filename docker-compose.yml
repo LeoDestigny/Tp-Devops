@@ -1,0 +1,101 @@
+# Specify version of docker-compose
+version: "3.2"
+
+# Create specific networks to use
+networks:
+
+  # An open network, which will be open to the world
+  open-network:
+    driver: bridge
+
+  internal-network:
+    driver: bridge
+
+services:
+  ms-reverse-proxy:
+
+    # Use remote image
+    image: traefik:1.7.16
+
+    # Always restart (in case of crash)
+    restart: always
+
+    # Network to use
+    # | open-network ONLY
+    networks:
+      - open-network
+
+    # The argument when launching the application
+    command: --docker
+
+    # Specify labels, used by the application
+    labels:
+      - "traefik.frontend.rule=Host:monitor.estimeo.localhost"
+
+    # Host data which the container will have access to
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    # Port used by the application and linked to the host
+    # | Port 80 of the container linked to the port 80 of the host
+    ports:
+      - "80:80"
+
+  ms-number-computer:
+    build: ./ms-number-computer
+
+    restart: always
+
+    networks:
+      - open-network
+      - internal-network
+
+    depends_on:
+      - ms-redis-cache
+
+  ms-main-node:
+
+    # Use remote image
+    build: ./ms-main-node
+
+    # Always restart (in case of crash)
+    restart: always
+
+    # Network to use
+    # | open-network ONLY
+    networks:
+      - open-network
+      - internal-network
+
+    # The argument when launching the application
+    command: --docker
+
+    labels:
+      - "traefik.domain=localhost"
+      - "traefik.port=8081"
+      - "traefik.frontend.rule=Host:docker-tutorial.localhost"
+      - "traefik.backend=ms-main-node"
+
+    # Port used by the application and linked to the host
+    # | Port 80 of the container linked to the port 80 of the host
+    ports:
+      - "8081:8081"
+
+    depends_on:
+      - ms-redis-cache
+
+  ms-redis-cache:
+    image: "redis:3.2.11-alpine"
+
+    restart: always
+
+    networks:
+      - internal-network
+
+    command: redis-server --appendonly yes
+
+    labels:
+      - "traefik.enable=false"
+
+    ports:
+      - "6379"
